@@ -47,8 +47,8 @@ type Options struct {
 	PreActions        []chromedp.Action
 	RequestMiddleware []ClientRequestMiddleware
 }
-type ClientRequestMiddleware struct {
-	BeforeRequest func(req *http.Request) error
+type ClientRequestMiddleware interface {
+	BeforeRequest(req *http.Request)
 }
 
 // Default values for client
