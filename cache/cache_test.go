@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"flag"
-	"github.com/geziyor/geziyor/cache/memorycache"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -13,6 +12,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/aabdulbasset/geziyor/cache/memorycache"
 )
 
 var s struct {

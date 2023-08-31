@@ -1,15 +1,16 @@
 package geziyor
 
 import (
-	"github.com/chromedp/chromedp"
-	"github.com/geziyor/geziyor/cache"
-	"github.com/geziyor/geziyor/client"
-	"github.com/geziyor/geziyor/export"
-	"github.com/geziyor/geziyor/metrics"
-	"github.com/geziyor/geziyor/middleware"
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/aabdulbasset/geziyor/cache"
+	"github.com/aabdulbasset/geziyor/client"
+	"github.com/aabdulbasset/geziyor/export"
+	"github.com/aabdulbasset/geziyor/metrics"
+	"github.com/aabdulbasset/geziyor/middleware"
+	"github.com/chromedp/chromedp"
 )
 
 // Options is custom options type for Geziyor
@@ -87,7 +88,8 @@ type Options struct {
 	RequestDelayRandomize bool
 
 	// Called before requests made to manipulate requests
-	RequestMiddlewares []middleware.RequestProcessor
+	RequestMiddlewares      []middleware.RequestProcessor
+	ClientRequestMiddleware []client.ClientRequestMiddleware
 
 	// Called after response received
 	ResponseMiddlewares []middleware.ResponseProcessor

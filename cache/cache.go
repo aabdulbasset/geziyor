@@ -11,7 +11,7 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"github.com/geziyor/geziyor/cache/memorycache"
+	"github.com/aabdulbasset/geziyor/cache/memorycache"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -122,7 +122,6 @@ func varyMatches(cachedResp *http.Response, req *http.Request) bool {
 // RoundTrip is a wrapper for caching requests.
 // If there is a fresh Response already in cache, then it will be returned without connecting to
 // the server.
-//
 func (t *Transport) RoundTrip(req *http.Request) (resp *http.Response, err error) {
 	if t.Policy == Dummy {
 		return t.RoundTripDummy(req)

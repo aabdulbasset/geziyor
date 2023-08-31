@@ -1,11 +1,13 @@
 # Geziyor
-Geziyor is a blazing fast web crawling and web scraping framework. It can be used to crawl websites and extract structured data from them. Geziyor is useful for a wide range of purposes such as data mining, monitoring and automated testing. 
 
-[![GoDoc](https://godoc.org/github.com/geziyor/geziyor?status.svg)](https://godoc.org/github.com/geziyor/geziyor)
-[![report card](https://goreportcard.com/badge/github.com/geziyor/geziyor)](http://goreportcard.com/report/geziyor/geziyor)
+Geziyor is a blazing fast web crawling and web scraping framework. It can be used to crawl websites and extract structured data from them. Geziyor is useful for a wide range of purposes such as data mining, monitoring and automated testing.
+
+[![GoDoc](https://godoc.org/github.com/aabdulbasset/geziyor?status.svg)](https://godoc.org/github.com/aabdulbasset/geziyor)
+[![report card](https://goreportcard.com/badge/github.com/aabdulbasset/geziyor)](http://goreportcard.com/report/geziyor/geziyor)
 [![Code Coverage](https://img.shields.io/codecov/c/github/geziyor/geziyor/master.svg)](https://codecov.io/github/geziyor/geziyor?branch=master)
 
 ## Features
+
 - **JS Rendering**
 - 5.000+ Requests/Sec
 - Caching (Memory/Disk/LevelDB)
@@ -17,14 +19,15 @@ Geziyor is a blazing fast web crawling and web scraping framework. It can be use
 - Automatic response decoding to UTF-8
 - Proxy management (Single, Round-Robin, Custom)
 
-See scraper [Options](https://godoc.org/github.com/geziyor/geziyor#Options) for all custom settings. 
+See scraper [Options](https://godoc.org/github.com/aabdulbasset/geziyor#Options) for all custom settings.
 
 ## Status
+
 We highly recommend you to use Geziyor with go modules.
 
 ## Usage
 
-This example extracts all quotes from *quotes.toscrape.com* and exports to JSON file.
+This example extracts all quotes from _quotes.toscrape.com_ and exports to JSON file.
 
 ```go
 func main() {
@@ -48,13 +51,13 @@ func quotesParse(g *geziyor.Geziyor, r *client.Response) {
 }
 ```
 
-See [tests](https://github.com/geziyor/geziyor/blob/master/geziyor_test.go) for more usage examples.
+See [tests](https://github.com/aabdulbasset/geziyor/blob/master/geziyor_test.go) for more usage examples.
 
 ## Documentation
 
 ### Installation
 
-    go get -u github.com/geziyor/geziyor
+    go get -u github.com/aabdulbasset/geziyor
 
 If you want to make JS rendered requests, make sure you have Chrome installed.
 
@@ -64,9 +67,9 @@ Read [this](https://wilsonmar.github.io/maximum-limits/) for more.
 
 ### Making Normal Requests
 
-Initial requests start with ```StartURLs []string``` field in ```Options```. 
+Initial requests start with `StartURLs []string` field in `Options`.
 Geziyor makes concurrent requests to those URLs.
-After reading response, ```ParseFunc func(g *Geziyor, r *Response)``` called.
+After reading response, `ParseFunc func(g *Geziyor, r *Response)` called.
 
 ```go
 geziyor.NewGeziyor(&geziyor.Options{
@@ -77,9 +80,9 @@ geziyor.NewGeziyor(&geziyor.Options{
 }).Start()
 ```
 
-If you want to manually create first requests, set ```StartRequestsFunc```.
-```StartURLs``` won't be used if you create requests manually.  
-You can make requests using ```Geziyor``` [methods](https://godoc.org/github.com/geziyor/geziyor#Geziyor):
+If you want to manually create first requests, set `StartRequestsFunc`.
+`StartURLs` won't be used if you create requests manually.  
+You can make requests using `Geziyor` [methods](https://godoc.org/github.com/aabdulbasset/geziyor#Geziyor):
 
 ```go
 geziyor.NewGeziyor(&geziyor.Options{
@@ -91,12 +94,12 @@ geziyor.NewGeziyor(&geziyor.Options{
         fmt.Println(string(r.Body))
     },
 }).Start()
-``` 
+```
 
 ### Making JS Rendered Requests
 
-JS Rendered requests can be made using ```GetRendered``` method. 
-By default, geziyor uses local Chrome application CLI to start Chrome browser. Set ```BrowserEndpoint``` option to use different chrome instance. Such as, "ws://localhost:3000"
+JS Rendered requests can be made using `GetRendered` method.
+By default, geziyor uses local Chrome application CLI to start Chrome browser. Set `BrowserEndpoint` option to use different chrome instance. Such as, "ws://localhost:3000"
 
 ```go
 geziyor.NewGeziyor(&geziyor.Options{
@@ -112,10 +115,10 @@ geziyor.NewGeziyor(&geziyor.Options{
 
 ### Extracting Data
 
-We can extract HTML elements using ```response.HTMLDoc```. HTMLDoc is Goquery's [Document](https://godoc.org/github.com/PuerkitoBio/goquery#Document).
+We can extract HTML elements using `response.HTMLDoc`. HTMLDoc is Goquery's [Document](https://godoc.org/github.com/PuerkitoBio/goquery#Document).
 
 HTMLDoc can be accessible on Response if response is HTML and can be parsed using Go's built-in HTML [parser](https://godoc.org/golang.org/x/net/html#Parse)
-If response isn't HTML, ```response.HTMLDoc``` would be ```nil```.  
+If response isn't HTML, `response.HTMLDoc` would be `nil`.
 
 ```go
 geziyor.NewGeziyor(&geziyor.Options{
@@ -130,8 +133,8 @@ geziyor.NewGeziyor(&geziyor.Options{
 
 ### Exporting Data
 
-You can export data automatically using exporters. Just send data to ```Geziyor.Exports``` chan.
-[Available exporters](https://godoc.org/github.com/geziyor/geziyor/export)
+You can export data automatically using exporters. Just send data to `Geziyor.Exports` chan.
+[Available exporters](https://godoc.org/github.com/aabdulbasset/geziyor/export)
 
 ```go
 geziyor.NewGeziyor(&geziyor.Options{
@@ -148,12 +151,11 @@ geziyor.NewGeziyor(&geziyor.Options{
 }).Start()
 ```
 
-
 ### Custom Requests - Passing Metadata To Callbacks
 
-You can create custom requests with ```client.NewRequest```
+You can create custom requests with `client.NewRequest`
 
-Use that request on ```geziyor.Do(request, callback)``` 
+Use that request on `geziyor.Do(request, callback)`
 
 ```go
 geziyor.NewGeziyor(&geziyor.Options{
@@ -169,17 +171,18 @@ geziyor.NewGeziyor(&geziyor.Options{
 ```
 
 ### Proxy - Use proxy per request
+
 If you want to use proxy for your requests, and you have 1 proxy, you can just set these env values:
 `HTTP_PROXY`
 `HTTPS_PROXY`
 And geziyor will use those proxies.
 
-Also, you can use in-order proxy per request by setting `ProxyFunc` option to `client.RoundRobinProxy` 
+Also, you can use in-order proxy per request by setting `ProxyFunc` option to `client.RoundRobinProxy`
 Or any custom proxy selection function that you want. See `client/proxy.go` on how to implement that kind of custom proxy selection function.
 
 Proxies can be HTTP, HTTPS and SOCKS5.
 
-Note: If you use `http` scheme for proxy, It'll be used for http requests and not for https requests.   
+Note: If you use `http` scheme for proxy, It'll be used for http requests and not for https requests.
 
 ```go
 geziyor.NewGeziyor(&geziyor.Options{
@@ -191,16 +194,16 @@ geziyor.NewGeziyor(&geziyor.Options{
 
 ## Benchmark
 
-**8748 request per seconds** on *Macbook Pro 15" 2016*
+**8748 request per seconds** on _Macbook Pro 15" 2016_
 
-See [tests](https://github.com/geziyor/geziyor/blob/master/geziyor_test.go) for this benchmark function:
+See [tests](https://github.com/aabdulbasset/geziyor/blob/master/geziyor_test.go) for this benchmark function:
 
 ```bash
 >> go test -run none -bench Requests -benchtime 10s
 goos: darwin
 goarch: amd64
-pkg: github.com/geziyor/geziyor
+pkg: github.com/aabdulbasset/geziyor
 BenchmarkRequests-8   	  200000	    108710 ns/op
 PASS
-ok  	github.com/geziyor/geziyor	22.861s
+ok  	github.com/aabdulbasset/geziyor	22.861s
 ```

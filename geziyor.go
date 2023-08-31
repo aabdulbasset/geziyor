@@ -1,13 +1,13 @@
 package geziyor
 
 import (
+	"github.com/aabdulbasset/geziyor/cache"
+	"github.com/aabdulbasset/geziyor/client"
+	"github.com/aabdulbasset/geziyor/export"
+	"github.com/aabdulbasset/geziyor/internal"
+	"github.com/aabdulbasset/geziyor/metrics"
+	"github.com/aabdulbasset/geziyor/middleware"
 	"github.com/chromedp/chromedp"
-	"github.com/geziyor/geziyor/cache"
-	"github.com/geziyor/geziyor/client"
-	"github.com/geziyor/geziyor/export"
-	"github.com/geziyor/geziyor/internal"
-	"github.com/geziyor/geziyor/metrics"
-	"github.com/geziyor/geziyor/middleware"
 	"golang.org/x/time/rate"
 
 	"io"
@@ -36,7 +36,8 @@ type Geziyor struct {
 		sync.RWMutex
 		hostSems map[string]chan struct{}
 	}
-	shutdown bool
+	clientReqMiddleware []client.ClientRequestMiddleware
+	shutdown            bool
 }
 
 // NewGeziyor creates new Geziyor with default values.
@@ -83,7 +84,9 @@ func NewGeziyor(opt *Options) *Geziyor {
 		AllocatorOptions:      chromedp.DefaultExecAllocatorOptions[:],
 		ProxyFunc:             opt.ProxyFunc,
 		PreActions:            opt.PreActions,
+		RequestMiddleware:     opt.ClientRequestMiddleware,
 	})
+
 	if opt.Cache != nil {
 		geziyor.Client.Transport = &cache.Transport{
 			Policy:              opt.CachePolicy,

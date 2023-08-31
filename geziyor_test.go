@@ -15,15 +15,15 @@ import (
 	"github.com/chromedp/chromedp"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/aabdulbasset/geziyor"
+	"github.com/aabdulbasset/geziyor/cache"
+	"github.com/aabdulbasset/geziyor/cache/diskcache"
+	"github.com/aabdulbasset/geziyor/client"
+	"github.com/aabdulbasset/geziyor/export"
+	"github.com/aabdulbasset/geziyor/internal"
+	"github.com/aabdulbasset/geziyor/metrics"
 	"github.com/elazarl/goproxy"
 	"github.com/fortytw2/leaktest"
-	"github.com/geziyor/geziyor"
-	"github.com/geziyor/geziyor/cache"
-	"github.com/geziyor/geziyor/cache/diskcache"
-	"github.com/geziyor/geziyor/client"
-	"github.com/geziyor/geziyor/export"
-	"github.com/geziyor/geziyor/internal"
-	"github.com/geziyor/geziyor/metrics"
 	"github.com/stretchr/testify/assert"
 )
 

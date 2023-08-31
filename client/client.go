@@ -4,16 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"time"
 
+	"github.com/aabdulbasset/geziyor/internal"
 	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
-	"github.com/geziyor/geziyor/internal"
+
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/transform"
 )
@@ -42,7 +44,11 @@ type Options struct {
 	// Geziyor Response will be nearly empty. Because we have no way to extract response without default pre actions.
 	// So, if you set this, you should handle all navigation, header setting, and response handling yourself.
 	// See defaultPreActions variable for the existing defaults.
-	PreActions []chromedp.Action
+	PreActions        []chromedp.Action
+	RequestMiddleware []ClientRequestMiddleware
+}
+type ClientRequestMiddleware struct {
+	BeforeRequest func(req *http.Request) error
 }
 
 // Default values for client
@@ -92,6 +98,9 @@ func NewClient(opt *Options) *Client {
 
 // DoRequest selects appropriate request handler, client or Chrome
 func (c *Client) DoRequest(req *Request) (resp *Response, err error) {
+	for _, middleware := range c.opt.RequestMiddleware {
+		middleware.BeforeRequest(req.Request)
+	}
 	if req.Rendered {
 		resp, err = c.doRequestChrome(req)
 	} else {
