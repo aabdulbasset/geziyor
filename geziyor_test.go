@@ -43,11 +43,11 @@ func TestUserAgent(t *testing.T) {
 		ParseFunc: func(g *geziyor.Geziyor, r *client.Response) {
 			var data map[string]interface{}
 			err := json.Unmarshal(r.Body, &data)
-
 			assert.NoError(t, err)
 			assert.Equal(t, client.DefaultUserAgent, data["headers"].(map[string]interface{})["User-Agent"])
 		},
 	}).Start()
+
 }
 
 func TestCache(t *testing.T) {

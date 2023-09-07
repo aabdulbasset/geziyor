@@ -86,6 +86,7 @@ func NewGeziyor(opt *Options) *Geziyor {
 		PreActions:            opt.PreActions,
 		RequestMiddleware:     opt.ClientRequestMiddleware,
 	})
+	geziyor.Client.Histogram = make(map[string]int)
 
 	if opt.Cache != nil {
 		geziyor.Client.Transport = &cache.Transport{
@@ -142,7 +143,7 @@ func NewGeziyor(opt *Options) *Geziyor {
 }
 
 // Start starts scraping
-func (g *Geziyor) Start() {
+func (g *Geziyor) Start() []int {
 	internal.Logger.Println("Scraping Started")
 
 	// Metrics
@@ -174,6 +175,14 @@ func (g *Geziyor) Start() {
 	g.wgExporters.Wait()
 	shutdownDoneChan <- struct{}{}
 	internal.Logger.Println("Scraping Finished")
+	var histogram []int
+	for i := 0; i < g.Opt.RetryTimes; i++ {
+		histogram = append(histogram, 0)
+	}
+	for _, v := range g.Client.Histogram {
+		histogram[v]++
+	}
+	return histogram
 }
 
 // Get issues a GET to the specified URL.

@@ -11,11 +11,12 @@ import (
 	"net/url"
 	"time"
 
+	"crypto/rand"
+
 	"github.com/aabdulbasset/geziyor/internal"
 	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
-
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/transform"
 )
@@ -28,7 +29,8 @@ var (
 // Client is a small wrapper around *http.Client to provide new methods.
 type Client struct {
 	*http.Client
-	opt *Options
+	opt       *Options
+	Histogram map[string]int
 }
 
 // Options is custom http.client options
@@ -98,6 +100,17 @@ func NewClient(opt *Options) *Client {
 
 // DoRequest selects appropriate request handler, client or Chrome
 func (c *Client) DoRequest(req *Request) (resp *Response, err error) {
+	//assign id to request if none exists
+	id := req.Meta["id"]
+	if id == nil {
+		b := make([]byte, 16)
+		_, err := rand.Read(b)
+		if err != nil {
+			return nil, err
+		}
+		req.Meta["id"] = fmt.Sprintf("%x", b)
+	}
+
 	for _, middleware := range c.opt.RequestMiddleware {
 		middleware.BeforeRequest(req.Request)
 	}
@@ -125,7 +138,7 @@ func (c *Client) DoRequest(req *Request) (resp *Response, err error) {
 			return c.DoRequest(req)
 		}
 	}
-
+	c.Histogram[req.Meta["id"].(string)] = req.retryCounter
 	return resp, err
 }
 
