@@ -38,7 +38,7 @@ func TestSimple(t *testing.T) {
 }
 
 func TestUserAgent(t *testing.T) {
-	geziyor.NewGeziyor(&geziyor.Options{
+	Histogram := geziyor.NewGeziyor(&geziyor.Options{
 		StartURLs: []string{"https://httpbin.org/anything"},
 		ParseFunc: func(g *geziyor.Geziyor, r *client.Response) {
 			var data map[string]interface{}
@@ -47,6 +47,7 @@ func TestUserAgent(t *testing.T) {
 			assert.Equal(t, client.DefaultUserAgent, data["headers"].(map[string]interface{})["User-Agent"])
 		},
 	}).Start()
+	fmt.Println(Histogram)
 
 }
 

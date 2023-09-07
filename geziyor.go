@@ -8,6 +8,7 @@ import (
 	"github.com/aabdulbasset/geziyor/metrics"
 	"github.com/aabdulbasset/geziyor/middleware"
 	"github.com/chromedp/chromedp"
+	cmap "github.com/orcaman/concurrent-map/v2"
 	"golang.org/x/time/rate"
 
 	"io"
@@ -86,7 +87,7 @@ func NewGeziyor(opt *Options) *Geziyor {
 		PreActions:            opt.PreActions,
 		RequestMiddleware:     opt.ClientRequestMiddleware,
 	})
-	geziyor.Client.Histogram = make(map[string]int)
+	geziyor.Client.Histogram = cmap.New[int]()
 
 	if opt.Cache != nil {
 		geziyor.Client.Transport = &cache.Transport{
@@ -179,8 +180,9 @@ func (g *Geziyor) Start() []int {
 	for i := 0; i < g.Opt.RetryTimes; i++ {
 		histogram = append(histogram, 0)
 	}
-	for _, v := range g.Client.Histogram {
-		histogram[v]++
+	for v := range g.Client.Histogram.IterBuffered() {
+
+		histogram[v.Val]++
 	}
 	return histogram
 }

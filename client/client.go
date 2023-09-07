@@ -13,6 +13,8 @@ import (
 
 	"crypto/rand"
 
+	cmap "github.com/orcaman/concurrent-map/v2"
+
 	"github.com/aabdulbasset/geziyor/internal"
 	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/network"
@@ -30,7 +32,7 @@ var (
 type Client struct {
 	*http.Client
 	opt       *Options
-	Histogram map[string]int
+	Histogram cmap.ConcurrentMap[string, int]
 }
 
 // Options is custom http.client options
@@ -138,7 +140,7 @@ func (c *Client) DoRequest(req *Request) (resp *Response, err error) {
 			return c.DoRequest(req)
 		}
 	}
-	c.Histogram[req.Meta["id"].(string)] = req.retryCounter
+	c.Histogram.Set(req.Meta["id"].(string), req.retryCounter)
 	return resp, err
 }
 
