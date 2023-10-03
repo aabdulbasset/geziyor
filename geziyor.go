@@ -177,7 +177,7 @@ func (g *Geziyor) Start() []int {
 	shutdownDoneChan <- struct{}{}
 	internal.Logger.Println("Scraping Finished")
 	var histogram []int
-	for i := 0; i < g.Opt.RetryTimes; i++ {
+	for i := 0; i <= g.Opt.RetryTimes+1; i++ {
 		histogram = append(histogram, 0)
 	}
 	for v := range g.Client.Histogram.IterBuffered() {
