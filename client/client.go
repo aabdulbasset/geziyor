@@ -164,8 +164,8 @@ func (c *Client) doRequestClient(req *Request) (*Response, error) {
 		} else {
 			clonedClient.ImpersonateChrome()
 		}
-
 	}
+	request.Headers = req.Header
 	resp, err := request.Send(req.Method, req.URL.String())
 	defer func() {
 		if resp.Err == nil && resp.Body != nil {
