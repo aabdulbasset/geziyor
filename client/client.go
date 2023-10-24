@@ -1,18 +1,22 @@
 package client
 
 import (
+	"bytes"
+	"compress/gzip"
+	"compress/zlib"
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"strings"
 
-	"io"
 	"net/http"
 	"net/url"
 	"time"
 
 	"crypto/rand"
 
+	"github.com/andybalholm/brotli"
 	cmap "github.com/orcaman/concurrent-map/v2"
 
 	"github.com/aabdulbasset/geziyor/internal"
@@ -20,8 +24,6 @@ import (
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 	"github.com/imroc/req/v3"
-	"golang.org/x/net/html/charset"
-	"golang.org/x/text/transform"
 )
 
 var (
@@ -173,37 +175,48 @@ func (c *Client) doRequestClient(req *Request) (*Response, error) {
 		}
 	}()
 	if err != nil || resp.Err != nil {
-		return nil, fmt.Errorf("response: %w", err, resp.Err)
+		return nil, fmt.Errorf("response: %w", err)
 	}
 
 	// Limit response body reading
-	bodyReader := io.LimitReader(resp.Body, c.opt.MaxBodySize)
 
-	// Decode response
-	if resp.Request.Method != "HEAD" && resp.ContentLength > 0 {
-		if req.Encoding != "" {
-			if enc, _ := charset.Lookup(req.Encoding); enc != nil {
-				bodyReader = transform.NewReader(bodyReader, enc.NewDecoder())
-			}
-		} else {
-			if !c.opt.CharsetDetectDisabled {
-				contentType := req.Header.Get("Content-Type")
-				bodyReader, resp.Err = charset.NewReader(bodyReader, contentType)
-				if err != nil {
-					return nil, fmt.Errorf("charset detection error on content-type %s: %w", contentType, err)
-				}
-			}
-		}
-	}
-
-	body, err := io.ReadAll(bodyReader)
+	encoding := resp.Header["Content-Encoding"]
+	body, err := ioutil.ReadAll(resp.Body)
+	var finalres []byte
 	if err != nil {
-		return nil, fmt.Errorf("reading body: %w", err)
+		panic(err)
+	}
+	finalres = body
+	if len(encoding) > 0 {
+		if encoding[0] == "gzip" {
+			unz, err := gUnzipData(body)
+			if err != nil {
+				panic(err)
+			}
+			finalres = unz
+		} else if encoding[0] == "deflate" {
+			unz, err := enflateData(body)
+			if err != nil {
+				panic(err)
+			}
+			finalres = unz
+		} else if encoding[0] == "br" {
+			unz, err := unBrotliData(body)
+			if err != nil {
+				panic(err)
+			}
+			finalres = unz
+		} else {
+			fmt.Println("UNKNOWN ENCODING: " + encoding[0])
+			finalres = body
+		}
+	} else {
+		finalres = body
 	}
 
 	response := Response{
 		Response: resp.Response,
-		Body:     body,
+		Body:     finalres,
 		Request:  req,
 	}
 
@@ -337,4 +350,21 @@ func NewRedirectionHandler(maxRedirect int) func(req *http.Request, via []*http.
 		}
 		return nil
 	}
+}
+func gUnzipData(data []byte) (resData []byte, err error) {
+	gz, _ := gzip.NewReader(bytes.NewReader(data))
+	respBody, err := ioutil.ReadAll(gz)
+	defer gz.Close()
+	return respBody, err
+}
+func enflateData(data []byte) (resData []byte, err error) {
+	zr, _ := zlib.NewReader(bytes.NewReader(data))
+	defer zr.Close()
+	enflated, err := ioutil.ReadAll(zr)
+	return enflated, err
+}
+func unBrotliData(data []byte) (resData []byte, err error) {
+	br := brotli.NewReader(bytes.NewReader(data))
+	respBody, err := ioutil.ReadAll(br)
+	return respBody, err
 }
