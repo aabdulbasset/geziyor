@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -19,6 +19,7 @@ import (
 	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
+	"github.com/imroc/req/v3"
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/transform"
 )
@@ -30,7 +31,7 @@ var (
 
 // Client is a small wrapper around *http.Client to provide new methods.
 type Client struct {
-	*http.Client
+	*req.Client
 	opt       *Options
 	Histogram cmap.ConcurrentMap[string, int]
 }
@@ -57,7 +58,7 @@ type ClientRequestMiddleware interface {
 
 // Default values for client
 const (
-	DefaultUserAgent        = "Geziyor 1.0"
+	DefaultUserAgent        = "Geziyor 2.0"
 	DefaultMaxBody    int64 = 1024 * 1024 * 1024 // 1GB
 	DefaultRetryTimes       = 2
 )
@@ -74,23 +75,26 @@ func NewClient(opt *Options) *Client {
 		proxyFunction = opt.ProxyFunc
 	}
 
-	httpClient := &http.Client{
-		Transport: &http.Transport{
-			Proxy: proxyFunction,
-			DialContext: (&net.Dialer{
-				Timeout:   15 * time.Second,
-				KeepAlive: 15 * time.Second,
-				DualStack: true,
-			}).DialContext,
-			ForceAttemptHTTP2:     true,
-			MaxIdleConns:          0,    // Default: 100
-			MaxIdleConnsPerHost:   1000, // Default: 2
-			IdleConnTimeout:       15 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 2 * time.Second,
-		},
-		Timeout: time.Second * 180, // Google's timeout
-	}
+	// httpClient := &http.Client{
+	// 	Transport: &http.Transport{
+	// 		Proxy: proxyFunction,
+	// 		DialContext: (&net.Dialer{
+	// 			Timeout:   15 * time.Second,
+	// 			KeepAlive: 15 * time.Second,
+	// 			DualStack: true,
+	// 		}).DialContext,
+	// 		ForceAttemptHTTP2:     true,
+	// 		MaxIdleConns:          0,    // Default: 100
+	// 		MaxIdleConnsPerHost:   1000, // Default: 2
+	// 		IdleConnTimeout:       15 * time.Second,
+	// 		TLSHandshakeTimeout:   10 * time.Second,
+	// 		ExpectContinueTimeout: 2 * time.Second,
+	// 	},
+	// 	Timeout: time.Second * 180, // Google's timeout
+	// }
+	httpClient := req.C()
+	httpClient.SetTimeout(180 * time.Second).SetIdleConnTimeout(15 * time.Second).SetMaxConnsPerHost(1000).SetMaxIdleConns(0)
+	httpClient.SetTLSHandshakeTimeout(10 * time.Second).SetExpectContinueTimeout(2 * time.Second).SetProxy(proxyFunction)
 
 	client := Client{
 		Client: httpClient,
@@ -116,6 +120,7 @@ func (c *Client) DoRequest(req *Request) (resp *Response, err error) {
 	for _, middleware := range c.opt.RequestMiddleware {
 		middleware.BeforeRequest(req.Request)
 	}
+
 	if req.Rendered {
 		resp, err = c.doRequestChrome(req)
 	} else {
@@ -147,14 +152,28 @@ func (c *Client) DoRequest(req *Request) (resp *Response, err error) {
 // doRequestClient is a simple wrapper to read response according to options.
 func (c *Client) doRequestClient(req *Request) (*Response, error) {
 	// Do request
-	resp, err := c.Do(req.Request)
+	clonedClient := c.Clone()
+	request := clonedClient.R()
+	request.RawRequest = req.Request
+	if req.Header.Get("user-agent") != "" {
+		userAgent := req.Header.Get("user-agent")
+		if strings.Contains(strings.ToLower(userAgent), "version") {
+			clonedClient.ImpersonateSafari()
+		} else if strings.Contains(strings.ToLower(userAgent), "firefox") {
+			clonedClient.ImpersonateFirefox()
+		} else {
+			clonedClient.ImpersonateChrome()
+		}
+
+	}
+	resp, err := request.Send(req.Method, req.URL.String())
 	defer func() {
-		if resp != nil {
+		if resp.Err == nil && resp.Body != nil {
 			resp.Body.Close()
 		}
 	}()
-	if err != nil {
-		return nil, fmt.Errorf("response: %w", err)
+	if err != nil || resp.Err != nil {
+		return nil, fmt.Errorf("response: %w", err, resp.Err)
 	}
 
 	// Limit response body reading
@@ -169,7 +188,7 @@ func (c *Client) doRequestClient(req *Request) (*Response, error) {
 		} else {
 			if !c.opt.CharsetDetectDisabled {
 				contentType := req.Header.Get("Content-Type")
-				bodyReader, err = charset.NewReader(bodyReader, contentType)
+				bodyReader, resp.Err = charset.NewReader(bodyReader, contentType)
 				if err != nil {
 					return nil, fmt.Errorf("charset detection error on content-type %s: %w", contentType, err)
 				}
@@ -183,7 +202,7 @@ func (c *Client) doRequestClient(req *Request) (*Response, error) {
 	}
 
 	response := Response{
-		Response: resp,
+		Response: resp.Response,
 		Body:     body,
 		Request:  req,
 	}
@@ -271,28 +290,15 @@ func (c *Client) doRequestChrome(req *Request) (*Response, error) {
 }
 
 // SetCookies handles the receipt of the cookies in a reply for the given URL
-func (c *Client) SetCookies(URL string, cookies []*http.Cookie) error {
-	if c.Jar == nil {
-		return ErrNoCookieJar
-	}
-	u, err := url.Parse(URL)
-	if err != nil {
-		return err
-	}
-	c.Jar.SetCookies(u, cookies)
+func (c *Client) SetClientCookies(URL string, cookies []*http.Cookie) error {
+
+	c.SetCommonCookies()
 	return nil
 }
 
 // Cookies returns the cookies to send in a request for the given URL.
 func (c *Client) Cookies(URL string) []*http.Cookie {
-	if c.Jar == nil {
-		return nil
-	}
-	parsedURL, err := url.Parse(URL)
-	if err != nil {
-		return nil
-	}
-	return c.Jar.Cookies(parsedURL)
+	return c.Cookies(URL)
 }
 
 // SetDefaultHeader sets header if not exists before

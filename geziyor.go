@@ -1,13 +1,13 @@
 package geziyor
 
 import (
-	"github.com/aabdulbasset/geziyor/cache"
 	"github.com/aabdulbasset/geziyor/client"
 	"github.com/aabdulbasset/geziyor/export"
 	"github.com/aabdulbasset/geziyor/internal"
 	"github.com/aabdulbasset/geziyor/metrics"
 	"github.com/aabdulbasset/geziyor/middleware"
 	"github.com/chromedp/chromedp"
+	"github.com/imroc/req/v3"
 	cmap "github.com/orcaman/concurrent-map/v2"
 	"golang.org/x/time/rate"
 
@@ -89,22 +89,17 @@ func NewGeziyor(opt *Options) *Geziyor {
 	})
 	geziyor.Client.Histogram = cmap.New[int]()
 
-	if opt.Cache != nil {
-		geziyor.Client.Transport = &cache.Transport{
-			Policy:              opt.CachePolicy,
-			Transport:           geziyor.Client.Transport,
-			Cache:               opt.Cache,
-			MarkCachedResponses: true,
-		}
-	}
 	if opt.Timeout != 0 {
-		geziyor.Client.Timeout = opt.Timeout
+		geziyor.Client.SetTimeout(opt.Timeout)
 	}
 	if !opt.CookiesDisabled {
-		geziyor.Client.Jar, _ = cookiejar.New(nil)
+		cookiejar, _ := cookiejar.New(nil)
+		geziyor.Client.SetCookieJar(cookiejar)
 	}
 	if opt.MaxRedirect != 0 {
-		geziyor.Client.CheckRedirect = client.NewRedirectionHandler(opt.MaxRedirect)
+		geziyor.Client.SetRedirectPolicy(
+			req.MaxRedirectPolicy(opt.MaxRedirect),
+		)
 	}
 
 	// Concurrency
