@@ -168,7 +168,7 @@ func (c *Client) doRequestClient(req *Request) (*Response, error) {
 		} else if strings.Contains(strings.ToLower(userAgent), "firefox") {
 			clonedClient.ImpersonateFirefox()
 		} else {
-			clonedClient.ImpersonateChrome()
+			clonedClient.ImpersonateChrome120()
 		}
 	}
 	request.Headers = req.Header
