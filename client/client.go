@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"strings"
 
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"crypto/rand"
+	"crypto/tls"
 
 	"github.com/andybalholm/brotli"
 	cmap "github.com/orcaman/concurrent-map/v2"
@@ -256,7 +258,8 @@ func (c *MyClient) ImpersonateChrome120() *MyClient {
 			Val: 262144,
 		},
 	}
-	c.SetTLSFingerprint(utls.HelloChrome_120_PQ).
+	spec, _ := Chrome126HelloSpec()
+	c.SetTLSFingerprintFromSpec(spec).
 		SetHTTP2SettingsFrame(chromeHttp2Settings...).
 		SetHTTP2ConnectionFlow(15663105).
 		SetCommonPseudoHeaderOder([]string{
@@ -447,4 +450,123 @@ func unBrotliData(data []byte) (resData []byte, err error) {
 	br := brotli.NewReader(bytes.NewReader(data))
 	respBody, err := ioutil.ReadAll(br)
 	return respBody, err
+}
+
+func Chrome126HelloSpec() (utls.ClientHelloSpec, error) {
+	return utls.ClientHelloSpec{
+		CipherSuites: []uint16{
+			utls.GREASE_PLACEHOLDER,
+			utls.TLS_AES_128_GCM_SHA256,
+			utls.TLS_AES_256_GCM_SHA384,
+			utls.TLS_CHACHA20_POLY1305_SHA256,
+			utls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			utls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			utls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			utls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			utls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+			utls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+			utls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+			utls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+			utls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+			utls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+			utls.TLS_RSA_WITH_AES_128_CBC_SHA,
+			utls.TLS_RSA_WITH_AES_256_CBC_SHA,
+		},
+		CompressionMethods: []byte{
+			0x00, // compressionNone
+		},
+		Extensions: utls.ShuffleChromeTLSExtensions([]utls.TLSExtension{
+			&utls.UtlsGREASEExtension{},
+			&utls.SNIExtension{},
+			&utls.ExtendedMasterSecretExtension{},
+			&utls.RenegotiationInfoExtension{Renegotiation: utls.RenegotiateOnceAsClient},
+			&utls.SupportedCurvesExtension{[]utls.CurveID{
+				utls.GREASE_PLACEHOLDER,
+				utls.X25519,
+				utls.CurveP256,
+				utls.CurveP384,
+			}},
+			&utls.SupportedPointsExtension{SupportedPoints: []byte{
+				0x00, // pointFormatUncompressed
+			}},
+			&utls.SessionTicketExtension{},
+			&utls.ALPNExtension{AlpnProtocols: []string{"h2", "http/1.1"}},
+			&utls.StatusRequestExtension{},
+			&utls.SignatureAlgorithmsExtension{SupportedSignatureAlgorithms: []utls.SignatureScheme{
+				utls.ECDSAWithP256AndSHA256,
+				utls.PSSWithSHA256,
+				utls.PKCS1WithSHA256,
+				utls.ECDSAWithP384AndSHA384,
+				utls.PSSWithSHA384,
+				utls.PKCS1WithSHA384,
+				utls.PSSWithSHA512,
+				utls.PKCS1WithSHA512,
+			}},
+			&utls.SCTExtension{},
+			&utls.KeyShareExtension{[]utls.KeyShare{
+				{Group: utls.CurveID(utls.GREASE_PLACEHOLDER), Data: []byte{0}},
+				{Group: utls.X25519},
+			}},
+			&utls.PSKKeyExchangeModesExtension{[]uint8{
+				utls.PskModeDHE,
+			}},
+			&utls.SupportedVersionsExtension{[]uint16{
+				utls.GREASE_PLACEHOLDER,
+				utls.VersionTLS13,
+				utls.VersionTLS12,
+			}},
+			&utls.UtlsCompressCertExtension{[]utls.CertCompressionAlgo{
+				utls.CertCompressionBrotli,
+			}},
+			&utls.ApplicationSettingsExtension{SupportedProtocols: []string{"h2"}},
+			&utls.UtlsGREASEExtension{},
+		}),
+	}, nil
+
+}
+
+type uTLSConn struct {
+	*utls.UConn
+}
+
+func (c *MyClient) SetTLSFingerprintFromSpec(clientHelloSpec utls.ClientHelloSpec) *MyClient {
+	fn := func(ctx context.Context, addr string, plainConn net.Conn) (conn net.Conn, tlsState *tls.ConnectionState, err error) {
+		colonPos := strings.LastIndex(addr, ":")
+		if colonPos == -1 {
+			colonPos = len(addr)
+		}
+		hostname := addr[:colonPos]
+		utlsConfig := &utls.Config{
+			ServerName:         hostname,
+			RootCAs:            c.GetTLSClientConfig().RootCAs,
+			NextProtos:         c.GetTLSClientConfig().NextProtos,
+			InsecureSkipVerify: c.GetTLSClientConfig().InsecureSkipVerify,
+		}
+
+		uconn := &uTLSConn{utls.UClient(plainConn, utlsConfig, utls.HelloCustom)}
+		uconn.ApplyPreset(&clientHelloSpec)
+		err = uconn.HandshakeContext(ctx)
+		if err != nil {
+			return
+		}
+		cs := uconn.Conn.ConnectionState()
+		conn = uconn
+		tlsState = &tls.ConnectionState{
+			Version:                     cs.Version,
+			HandshakeComplete:           cs.HandshakeComplete,
+			DidResume:                   cs.DidResume,
+			CipherSuite:                 cs.CipherSuite,
+			NegotiatedProtocol:          cs.NegotiatedProtocol,
+			NegotiatedProtocolIsMutual:  cs.NegotiatedProtocolIsMutual,
+			ServerName:                  cs.ServerName,
+			PeerCertificates:            cs.PeerCertificates,
+			VerifiedChains:              cs.VerifiedChains,
+			SignedCertificateTimestamps: cs.SignedCertificateTimestamps,
+			OCSPResponse:                cs.OCSPResponse,
+			TLSUnique:                   cs.TLSUnique,
+		}
+		return
+	}
+	c.Transport.SetTLSHandshake(fn)
+	return c
 }
