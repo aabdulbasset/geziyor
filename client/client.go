@@ -178,12 +178,32 @@ func (c *Client) doRequestClient(req *Request) (*Response, error) {
 		userAgent := req.Header.Get("user-agent")
 		reqOptions.UserAgent = userAgent
 		if strings.Contains(strings.ToLower(userAgent), "firefox") {
+
 			reqOptions.Ja3 = true
 			reqOptions.H3 = true
 			reqOptions.Headers = DefaultFirefoxHeaders()
 			reqOptions.Ja3Spec, reqOptions.H2Ja3Spec = DefaultFirefoxSpec()
 		}
 		if strings.Contains(strings.ToLower(userAgent), "chrome") {
+			reqOptions.OrderHeaders = []string{":method",
+				":authority",
+				":scheme",
+				":path",
+				"sec-ch-ua",
+				"sec-ch-ua-mobile",
+				"sec-ch-ua-platform",
+				"upgrade-insecure-requests",
+				"user-agent",
+				"accept",
+				"sec-gpc",
+				"accept-language",
+				"sec-fetch-site",
+				"sec-fetch-mode",
+				"sec-fetch-user",
+				"sec-fetch-dest",
+				"accept-encoding",
+				"priority"}
+
 			reqOptions.Ja3 = true
 			reqOptions.H3 = true
 			reqOptions.Headers = DefaultChromeHeaders()
