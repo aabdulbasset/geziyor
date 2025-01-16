@@ -1,8 +1,6 @@
 package geziyor
 
 import (
-	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/aabdulbasset/geziyor/cache"
@@ -74,7 +72,7 @@ type Options struct {
 	ParseHTMLDisabled bool
 
 	// ProxyFunc setting proxy for each request
-	ProxyFunc func(*http.Request) (*url.URL, error)
+	ProxyFunc func() (proxyUrl string)
 
 	// Rendered requests pre actions. Setting this will override the existing default.
 	// And you'll need to handle all rendered actions, like navigation, waiting, response etc.

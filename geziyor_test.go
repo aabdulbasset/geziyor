@@ -366,7 +366,6 @@ func TestProxy(t *testing.T) {
 
 	geziyor.NewGeziyor(&geziyor.Options{
 		StartURLs:         []string{"http://httpbin.org/anything"},
-		ProxyFunc:         client.RoundRobinProxy(ts.URL),
 		RobotsTxtDisabled: true,
 		ParseFunc: func(g *geziyor.Geziyor, r *client.Response) {
 			var data map[string]interface{}
@@ -385,11 +384,7 @@ func BenchmarkRequests(b *testing.B) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "Hello, client")
 	}))
-	ts.Client().Transport = client.NewClient(&client.Options{
-		MaxBodySize:    client.DefaultMaxBody,
-		RetryTimes:     client.DefaultRetryTimes,
-		RetryHTTPCodes: client.DefaultRetryHTTPCodes,
-	}).Transport
+
 	defer ts.Close()
 
 	// As we don't benchmark creating a server, reset timer.

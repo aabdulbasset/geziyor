@@ -7,13 +7,11 @@ import (
 	"github.com/aabdulbasset/geziyor/metrics"
 	"github.com/aabdulbasset/geziyor/middleware"
 	"github.com/chromedp/chromedp"
-	"github.com/imroc/req/v3"
 	cmap "github.com/orcaman/concurrent-map/v2"
 	"golang.org/x/time/rate"
 
 	"io"
 	"io/ioutil"
-	"net/http/cookiejar"
 	"os"
 	"os/signal"
 	"runtime/debug"
@@ -86,21 +84,11 @@ func NewGeziyor(opt *Options) *Geziyor {
 		ProxyFunc:             opt.ProxyFunc,
 		PreActions:            opt.PreActions,
 		RequestMiddleware:     opt.ClientRequestMiddleware,
+		Timeout:               opt.Timeout,
+		CookiesDisabled:       opt.CookiesDisabled,
+		MaxRedirect:           opt.MaxRedirect,
 	})
 	geziyor.Client.Histogram = cmap.New[int]()
-
-	if opt.Timeout != 0 {
-		geziyor.Client.SetTimeout(opt.Timeout)
-	}
-	if !opt.CookiesDisabled {
-		cookiejar, _ := cookiejar.New(nil)
-		geziyor.Client.SetCookieJar(cookiejar)
-	}
-	if opt.MaxRedirect != 0 {
-		geziyor.Client.SetRedirectPolicy(
-			req.MaxRedirectPolicy(opt.MaxRedirect),
-		)
-	}
 
 	// Concurrency
 	if opt.RequestsPerSecond != 0 {

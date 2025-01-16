@@ -23,7 +23,8 @@ import (
 	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
-	"github.com/imroc/req/v3"
+	"github.com/gospider007/ja3"
+	"github.com/gospider007/requests"
 )
 
 var (
@@ -33,7 +34,7 @@ var (
 
 // Client is a small wrapper around *http.Client to provide new methods.
 type Client struct {
-	*req.Client
+	*requests.Client
 	opt       *Options
 	Histogram cmap.ConcurrentMap[string, int]
 }
@@ -46,7 +47,10 @@ type Options struct {
 	RetryHTTPCodes        []int
 	RemoteAllocatorURL    string
 	AllocatorOptions      []chromedp.ExecAllocatorOption
-	ProxyFunc             func(*http.Request) (*url.URL, error)
+	ProxyFunc             func() (proxyUrl string)
+	Timeout               time.Duration
+	CookiesDisabled       bool
+	MaxRedirect           int
 	// Changing this will override the existing default PreActions for Rendered requests.
 	// Geziyor Response will be nearly empty. Because we have no way to extract response without default pre actions.
 	// So, if you set this, you should handle all navigation, header setting, and response handling yourself.
@@ -71,11 +75,6 @@ var (
 
 // NewClient creates http.Client with modified values for typical web scraper
 func NewClient(opt *Options) *Client {
-	// Default proxy function is http.ProxyFunction
-	var proxyFunction = http.ProxyFromEnvironment
-	if opt.ProxyFunc != nil {
-		proxyFunction = opt.ProxyFunc
-	}
 
 	// httpClient := &http.Client{
 	// 	Transport: &http.Transport{
@@ -94,9 +93,29 @@ func NewClient(opt *Options) *Client {
 	// 	},
 	// 	Timeout: time.Second * 180, // Google's timeout
 	// }
-	httpClient := req.C()
-	httpClient.SetTimeout(180 * time.Second).SetIdleConnTimeout(15 * time.Second).SetMaxConnsPerHost(1000).SetMaxIdleConns(0)
-	httpClient.SetTLSHandshakeTimeout(10 * time.Second).SetExpectContinueTimeout(2 * time.Second).SetProxy(proxyFunction)
+	options := requests.ClientOption{
+		Timeout:             180 * time.Second,
+		TlsHandshakeTimeout: 10 * time.Second,
+		DialOption: requests.DialOption{
+			DialTimeout: 15 * time.Second,
+			KeepAlive:   15 * time.Second,
+		},
+	}
+	if opt.Timeout != 0 {
+		options.Timeout = opt.Timeout
+	}
+	if opt.CookiesDisabled {
+		options.DisCookie = true
+	}
+	if opt.MaxRedirect != 0 {
+		options.MaxRedirect = opt.MaxRedirect
+	}
+
+	httpClient, httpClientErr := requests.NewClient(context.Background(), options)
+
+	if httpClientErr != nil {
+		panic(httpClientErr)
+	}
 
 	client := Client{
 		Client: httpClient,
@@ -153,25 +172,32 @@ func (c *Client) DoRequest(req *Request) (resp *Response, err error) {
 
 // doRequestClient is a simple wrapper to read response according to options.
 func (c *Client) doRequestClient(req *Request) (*Response, error) {
-	// Do request
-	clonedClient := c.Clone()
-	request := clonedClient.R()
-	request.RawRequest = req.Request
+
+	reqOptions := requests.RequestOption{}
 	if req.Header.Get("user-agent") != "" {
 		userAgent := req.Header.Get("user-agent")
-		if strings.Contains(strings.ToLower(userAgent), "version") {
-			clonedClient.ImpersonateSafari()
-		} else if strings.Contains(strings.ToLower(userAgent), "firefox") {
-			clonedClient.ImpersonateFirefox()
-		} else {
-			clonedClient.ImpersonateChrome()
+		reqOptions.UserAgent = userAgent
+		reqOptions.Ja3 = true
+		reqOptions.H3 = true
+		if strings.Contains(strings.ToLower(userAgent), "firefox") {
+			reqOptions.Headers = DefaultFirefoxHeaders()
+			reqOptions.Ja3Spec, reqOptions.H2Ja3Spec = DefaultFirefoxSpec()
 		}
+		if strings.Contains(strings.ToLower(userAgent), "chrome") {
+			reqOptions.Headers = DefaultChromeHeaders()
+			reqOptions.Ja3Spec, reqOptions.H2Ja3Spec = DefaultChromeSpec()
+		}
+
 	}
-	request.Headers = req.Header
-	resp, err := request.Send(req.Method, req.URL.String())
+	if c.opt.ProxyFunc != nil {
+		reqOptions.Proxy = c.opt.ProxyFunc()
+	}
+	reqOptions.Headers = req.Header
+	// Do request
+	resp, err := c.Request(context.Background(), req.Method, req.URL.String(), reqOptions)
 	defer func() {
 		if resp.Err == nil && resp.Body != nil {
-			resp.Body.Close()
+			resp.CloseBody()
 		}
 	}()
 	if err != nil || resp.Err != nil {
@@ -180,43 +206,9 @@ func (c *Client) doRequestClient(req *Request) (*Response, error) {
 
 	// Limit response body reading
 
-	encoding := resp.Header["Content-Encoding"]
-	body, err := ioutil.ReadAll(resp.Body)
-	var finalres []byte
-	if err != nil {
-		panic(err)
-	}
-	finalres = body
-	if len(encoding) > 0 {
-		if encoding[0] == "gzip" {
-			unz, err := gUnzipData(body)
-			if err != nil {
-				panic(err)
-			}
-			finalres = unz
-		} else if encoding[0] == "deflate" {
-			unz, err := enflateData(body)
-			if err != nil {
-				panic(err)
-			}
-			finalres = unz
-		} else if encoding[0] == "br" {
-			unz, err := unBrotliData(body)
-			if err != nil {
-				panic(err)
-			}
-			finalres = unz
-		} else {
-			fmt.Println("UNKNOWN ENCODING: " + encoding[0])
-			finalres = body
-		}
-	} else {
-		finalres = body
-	}
-
 	response := Response{
-		Response: resp.Response,
-		Body:     finalres,
+		Response: resp.Response(),
+		Body:     resp.Content(),
 		Request:  req,
 	}
 
@@ -305,7 +297,11 @@ func (c *Client) doRequestChrome(req *Request) (*Response, error) {
 // SetCookies handles the receipt of the cookies in a reply for the given URL
 func (c *Client) SetClientCookies(URL string, cookies []*http.Cookie) error {
 
-	c.SetCommonCookies()
+	formatUrl, err := url.Parse(URL)
+	if err != nil {
+		return err
+	}
+	c.SetCookies(formatUrl, cookies)
 	return nil
 }
 
@@ -367,4 +363,68 @@ func unBrotliData(data []byte) (resData []byte, err error) {
 	br := brotli.NewReader(bytes.NewReader(data))
 	respBody, err := ioutil.ReadAll(br)
 	return respBody, err
+}
+
+func DefaultChromeHeaders() *requests.OrderMap {
+	headers := requests.NewOrderMap()
+	headers.Set("cache-control", "no-cache")
+	headers.Set("sec-ch-ua", `"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"`)
+	headers.Set("sec-ch-ua-mobile", "?0")
+	headers.Set("sec-ch-ua-platform", `"Windows"`)
+	headers.Set("upgrade-insecure-requests", "1")
+	headers.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.3")
+	headers.Set("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+	headers.Set("sec-fetch-site", "same-origin")
+	headers.Set("sec-fetch-mode", "navigate")
+	headers.Set("sec-fetch-user", "?1")
+	headers.Set("sec-fetch-dest", "document")
+	headers.Set("accept-encoding", "gzip, deflate, br")
+	headers.Set("accept-language", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+	headers.Set("priority", "u=0, i")
+
+	return headers
+}
+
+// DefaultFirefoxHeaders returns the default headers for Firefox.
+//
+// The headers returned are those commonly sent by Firefox on Windows.
+func DefaultFirefoxHeaders() *requests.OrderMap {
+	headers := requests.NewOrderMap()
+	headers.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0")
+	headers.Set("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+	headers.Set("accept-language", "en-US,en;q=0.5")
+	headers.Set("accept-encoding", "gzip, deflate, br")
+	headers.Set("upgrade-insecure-requests", "1")
+	headers.Set("sec-fetch-dest", "document")
+	headers.Set("sec-fetch-mode", "navigate")
+	headers.Set("sec-fetch-site", "none")
+	headers.Set("sec-fetch-user", "?1")
+	headers.Set("priority", "u=0, i")
+	headers.Set("te", "trailers")
+	return headers
+}
+
+func DefaultChromeSpec() (ja3.Spec, ja3.H2Spec) {
+	ja3Spec, ja3Err := ja3.CreateSpecWithStr("771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,51-27-17513-65037-16-65281-0-10-35-23-45-5-18-11-13-43,4588-29-23-24,0")
+	if ja3Err != nil {
+		panic(ja3Err)
+	}
+	h2String := "1:65536,2:0,4:6291456,6:262144|15663105|0|m,a,s,p"
+	http2Spec, http2Err := ja3.CreateH2SpecWithStr(h2String)
+	if http2Err != nil {
+		panic(http2Err)
+	}
+	return ja3Spec, http2Spec
+}
+
+func DefaultFirefoxSpec() (ja3.Spec, ja3.H2Spec) {
+	ja3Spec, ja3Err := ja3.CreateSpecWithStr("771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-34-51-43-13-45-28-27-65037,4588-29-23-24-25-256-257,0")
+	if ja3Err != nil {
+		panic(ja3Err)
+	}
+	http2Spec, http2Err := ja3.CreateH2SpecWithStr("1:65536,2:0,4:131072,5:16384|12517377|0|m,p,a,s")
+	if http2Err != nil {
+		panic(http2Err)
+	}
+	return ja3Spec, http2Spec
 }
