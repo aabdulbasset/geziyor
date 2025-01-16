@@ -47,7 +47,7 @@ type Options struct {
 	RetryHTTPCodes        []int
 	RemoteAllocatorURL    string
 	AllocatorOptions      []chromedp.ExecAllocatorOption
-	ProxyFunc             func() (proxyUrl string)
+	ProxyFunc             func(ctx *requests.Response) (string, error)
 	Timeout               time.Duration
 	CookiesDisabled       bool
 	MaxRedirect           int
@@ -112,8 +112,8 @@ func NewClient(opt *Options) *Client {
 	}
 
 	httpClient, httpClientErr := requests.NewClient(context.Background(), options)
-
 	if httpClientErr != nil {
+		fmt.Println(httpClientErr)
 		panic(httpClientErr)
 	}
 
@@ -177,31 +177,33 @@ func (c *Client) doRequestClient(req *Request) (*Response, error) {
 	if req.Header.Get("user-agent") != "" {
 		userAgent := req.Header.Get("user-agent")
 		reqOptions.UserAgent = userAgent
-		reqOptions.Ja3 = true
-		reqOptions.H3 = true
 		if strings.Contains(strings.ToLower(userAgent), "firefox") {
+			reqOptions.Ja3 = true
+			reqOptions.H3 = true
 			reqOptions.Headers = DefaultFirefoxHeaders()
 			reqOptions.Ja3Spec, reqOptions.H2Ja3Spec = DefaultFirefoxSpec()
 		}
 		if strings.Contains(strings.ToLower(userAgent), "chrome") {
+			reqOptions.Ja3 = true
+			reqOptions.H3 = true
 			reqOptions.Headers = DefaultChromeHeaders()
 			reqOptions.Ja3Spec, reqOptions.H2Ja3Spec = DefaultChromeSpec()
 		}
 
 	}
 	if c.opt.ProxyFunc != nil {
-		reqOptions.Proxy = c.opt.ProxyFunc()
+		reqOptions.GetProxy = c.opt.ProxyFunc
 	}
 	reqOptions.Headers = req.Header
 	// Do request
-	resp, err := c.Request(context.Background(), req.Method, req.URL.String(), reqOptions)
+	resp, respErr := c.Request(context.Background(), req.Method, req.URL.String(), reqOptions)
 	defer func() {
-		if resp.Err == nil && resp.Body != nil {
+		if respErr == nil && len(resp.Text()) > 0 {
 			resp.CloseBody()
 		}
 	}()
-	if err != nil || resp.Err != nil {
-		return nil, fmt.Errorf("response: %w", err)
+	if respErr != nil {
+		return nil, respErr
 	}
 
 	// Limit response body reading

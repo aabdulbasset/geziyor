@@ -13,6 +13,7 @@ import (
 
 	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/chromedp"
+	"github.com/gospider007/requests"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/aabdulbasset/geziyor"
@@ -30,10 +31,11 @@ import (
 func TestSimple(t *testing.T) {
 	defer leaktest.Check(t)()
 	geziyor.NewGeziyor(&geziyor.Options{
-		StartURLs: []string{"http://api.ipify.org"},
+		StartURLs: []string{"https://books.toscrape.com/"},
 		ParseFunc: func(g *geziyor.Geziyor, r *client.Response) {
 			fmt.Println(string(r.Body))
 		},
+		RobotsTxtDisabled: true,
 	}).Start()
 }
 
@@ -355,12 +357,14 @@ func TestPassMetadata(t *testing.T) {
 func TestProxy(t *testing.T) {
 	// Setup fake proxy server
 	testHeaderKey := "Geziyor"
-	testHeaderVal := "value"
+	testHeaderVal := "Works"
+
 	proxy := goproxy.NewProxyHttpServer()
 	proxy.OnRequest().DoFunc(func(r *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 		r.Header.Set(testHeaderKey, testHeaderVal)
 		return r, nil
 	})
+
 	ts := httptest.NewServer(proxy)
 	defer ts.Close()
 
@@ -371,8 +375,13 @@ func TestProxy(t *testing.T) {
 			var data map[string]interface{}
 			err := json.Unmarshal(r.Body, &data)
 			assert.NoError(t, err)
+			fmt.Println(data["origin"])
 			// Check header set
 			assert.Equal(t, testHeaderVal, data["headers"].(map[string]interface{})[testHeaderKey])
+		},
+		ProxyFunc: func(ctx *requests.Response) (string, error) { //Penalty when creating a new connection
+			//set proxy,ex:"http://127.0.0.1:8080","https://127.0.0.1:8080","socks5://127.0.0.1:8080"
+			return "http://139.162.78.109:3128", nil
 		},
 	}).Start()
 }

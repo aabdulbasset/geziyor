@@ -9,6 +9,7 @@ import (
 	"github.com/aabdulbasset/geziyor/metrics"
 	"github.com/aabdulbasset/geziyor/middleware"
 	"github.com/chromedp/chromedp"
+	"github.com/gospider007/requests"
 )
 
 // Options is custom options type for Geziyor
@@ -72,7 +73,7 @@ type Options struct {
 	ParseHTMLDisabled bool
 
 	// ProxyFunc setting proxy for each request
-	ProxyFunc func() (proxyUrl string)
+	ProxyFunc func(ctx *requests.Response) (string, error)
 
 	// Rendered requests pre actions. Setting this will override the existing default.
 	// And you'll need to handle all rendered actions, like navigation, waiting, response etc.
